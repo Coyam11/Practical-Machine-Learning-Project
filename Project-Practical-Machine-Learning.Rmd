@@ -1,0 +1,137 @@
+---
+title: "Project 4"
+author: "Facundo Perez"
+date: "22/4/2020"
+output: html_document
+---
+
+Resume
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+The goal of this work is to predict the manner in which the participants makes the workout. So, we try to predict the classe variable as an outcome. 
+First we clean the data, and split the training dataset into a training and a validation dataset to have a cross validation. 
+With this dataset, we did a tree wich didn't fit well the data. 
+The second model is a model based on bagging. This makes a very good fit.
+Is very likely that this model (fit 100% in validation) is overfitting, so the out of sample error is very small, but we have to take this with precaution.
+
+We load libraries, "dplyr", "caret", "rattle", "ggplot2".
+
+``` {r echo = FALSE, message=FALSE}
+library(dplyr)
+library(caret)
+library(rattle)
+library(ggplot2)
+urltraining <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+urltesting <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(urltraining, "training.csv")
+download.file(urltesting, "testing.csv")
+```
+
+Open training and testing sets.
+
+``` {r}
+training <- read.csv("training.csv")
+testing <- read.csv("testing.csv")
+```
+
+See the distribution of the variable of interes in the training set.
+
+``` {r}
+plot(training$classe)
+```
+
+Create function for look na and select the variables that doesn't have na.
+
+``` {r}
+fornas<-function(data){
+        nas <- c(rep(0, dim(data)[2]))        
+                for (i in 1:dim(data)[2]){
+                        nas[i] <- sum(is.na(data[,i]))
+                                
+        }
+        nas
+}
+
+training <- training[,fornas(training)==0]
+testing <- testing[, fornas(testing)==0]
+```
+
+Function for eliminate the variables that are empty and eliminate those variables and select the variables of interes.
+
+``` {r}
+ forempty <-function(data){
+         emptys <- c(rep(0, dim(data)[2]))        
+         for (i in 1:dim(data)[2]){
+                 emptys[i] <- sum(data[,i]=='')
+                 
+         }
+         emptys
+ }
+ 
+training <- training[,forempty(training)==0]
+testing <- testing[, forempty(training)==0]
+training <- select(training, -X, -new_window, -user_name, -cvtd_timestamp, 
+                   -raw_timestamp_part_1, -raw_timestamp_part_2, -num_window)
+testing <- select(testing, -X, -new_window, -user_name, -cvtd_timestamp, 
+                   -raw_timestamp_part_1, -raw_timestamp_part_2, -num_window)
+```
+
+Now we have a clean dataset.
+
+# Cross-validation
+We create a partition of the training set call validation.
+
+``` {r}
+inTrain <- createDataPartition(training$classe, p=0.7, list = FALSE)
+training <- training[inTrain,]
+validation <-training[-inTrain,]
+```
+
+# Model 1 Tree
+
+First we apply a tree model. We can see that the accuracy is low. Only 50%.
+
+``` {r}
+set.seed(7431)
+model1 <- train(classe ~ ., data=training, method = "rpart")
+model1
+fancyRpartPlot(model1$finalModel)
+```
+
+
+
+Next, we apply the model to the validation set. We can see that the accuracy is near 50%. The out of sample error is big. 
+
+``` {r}
+predvalidation <- predict(model1, validation)
+confusionMatrix(predvalidation, validation$classe)
+```
+
+# Model 2 Bagging
+Next we apply a bagging model. This model have a really good accuracy, near 97%.
+
+``` {r}
+set.seed(7431)
+model2 <- train(classe ~ ., data = training, method = "treebag")
+model2
+```
+
+
+We apply the second model to the validation dataset. We can see that the out of sample error is pretty low, because we have a accuracy near 1. Probably we are overfitting.
+
+``` {r}
+predvalidation2 <- predict(model2, validation)
+confusionMatrix(predvalidation2, validation$classe)
+```
+
+
+
+# Test set
+
+Last, we apply the bagging model to the test set
+
+```{r}
+predtesting <- predict(model2, testing)
+```
+
